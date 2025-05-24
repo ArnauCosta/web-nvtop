@@ -7,10 +7,19 @@ text='                  _       _   _       _
                                               | |    
                                               |_|    '
 
-# Blue color code
 BLUE='\033[0;34m'
-# Reset color
 NC='\033[0m'
 
 echo -e "${BLUE}${text}${NC}"
 
+REPO_URL="https://github.com/ArnauCosta/web-nvtop.git"
+
+git clone "$REPO_URL"
+
+REPO_NAME=$(basename "$REPO_URL" .git)
+
+cd "$REPO_NAME" || { echo "Failed to enter repo directory"; exit 1; }
+
+chmod +x run.sh
+
+./run.sh

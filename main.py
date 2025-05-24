@@ -9,7 +9,6 @@ app = FastAPI()
 
 public_dir = os.path.join(os.path.dirname(__file__), "public")
 
-# Mount the public folder
 app.mount("/public", StaticFiles(directory=public_dir), name="public")
 
 @app.get("/", response_class=Response)
