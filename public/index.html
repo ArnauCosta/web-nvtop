@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Information</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            margin: 20px;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        .gpu-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .gpu-info div {
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #2b2b2b;
+            flex: 1;
+            margin-right: 20px;
+        }
+        .gpu-info div:last-child {
+            margin-right: 0;
+        }
+        .gpu-info div h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+        .gpu-info div table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .gpu-info div th,
+        .gpu-info div td {
+            padding: 5px 10px;
+            text-align: center;
+            border: none;
+        }
+        .gpu-info div th {
+            color: #888;
+        }
+        .chart-container {
+            width: 100%;
+            margin: 20px 0;
+            position: relative;
+            height: 600px;
+            /* Adjust the height as needed */
+        }
+        .chart-container canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="gpu-info" id="gpu-list"></div>
+        <div>
+            <label for="gpu-select">Select GPU:</label>
+            <select id="gpu-select" onchange="updateDataAndCharts()">
+                <!-- Options will be populated dynamically -->
+            </select>
+        </div>
+        <div class="chart-container">
+            <canvas id="gpu-combined-chart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="gpu-temperature-chart"></canvas>
+        </div>
+    </div>
+    <script>
+        const apiUrl = '/gpus';
+        const gpuList = document.getElementById('gpu-list');
+        const gpuSelect = document.getElementById('gpu-select');
+        const combinedChartCanvas = document.getElementById('gpu-combined-chart');
+        const temperatureChartCanvas = document.getElementById('gpu-temperature-chart');
+        let memoryData = Array(50).fill(null);
+        let utilizationData = Array(50).fill(null);
+        let temperatureData = Array(50).fill(null);
+        let combinedChart = null;
+        let temperatureChart = null;
+        let gpus = [];
+        let selectedGpuIndex = 0; // Default to the first GPU
+
+        function fetchGpuData() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', apiUrl, true);
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    gpus = JSON.parse(xhr.responseText);
+                    populateGpuSelect(gpus);
+                    displayGpuData(gpus[selectedGpuIndex]);
+                    updateCharts(gpus[selectedGpuIndex]);
+                } else {
+                    console.error('Error fetching GPU data:', xhr.status);
+                }
+            };
+            xhr.onerror = function () {
+                console.error('Error fetching GPU data:', xhr.statusText);
+            };
+            xhr.send();
+        }
+
+        function populateGpuSelect(gpus) {
+            gpuSelect.innerHTML = '';
+            gpus.forEach(gpu => {
+                const option = document.createElement('option');
+                option.value = gpu.index;
+                option.text = `GPU ${gpu.index} - ${gpu.name}`;
+                gpuSelect.appendChild(option);
+            });
+            gpuSelect.value = selectedGpuIndex; // Set the default selected GPU
+        }
+
+        function displayGpuData(gpu) {
+            gpuList.innerHTML = '';
+            if (gpu) {
+                const gpuInfo = document.createElement('div');
+                gpuInfo.className = 'gpu-info';
+                gpuInfo.innerHTML = `
+                    <h2>GPU ${gpu.index} - ${gpu.name}</h2>
+                    <table>
+                        <tr>
+                            <th>Total Memory (MB)</th>
+                            <th>Used Memory (MB)</th>
+                            <th>Free Memory (MB)</th>
+                            <th>Utilization (%)</th>
+                            <th>Temperature (°C)</th>
+
+                        </tr>
+                        <tr>
+                            <td>${gpu.memory_total}</td>
+                            <td>${gpu.memory_used}</td>
+                            <td>${gpu.memory_free}</td>
+                            <td>${gpu.utilization}</td>
+                            <td>${gpu.temperature}</td>
+
+                        </tr>
+                    </table>
+                `;
+                gpuList.appendChild(gpuInfo);
+            }
+        }
+
+        function updateCharts(gpu) {
+            if (gpu) {
+                const newMemoryData = gpu.memory_used;
+                const newUtilizationData = gpu.utilization;
+                const newTemperatureData = gpu.temperature;
+
+                // Shift the existing data to the left and add the new data point
+                memoryData = memoryData.slice(1).concat(newMemoryData);
+                utilizationData = utilizationData.slice(1).concat(newUtilizationData);
+                temperatureData = temperatureData.slice(1).concat(newTemperatureData);
+
+                if (combinedChart === null) {
+                    combinedChart = new Chart(combinedChartCanvas, {
+                        type: 'line',
+                        data: {
+                            labels: Array.from({ length: 50 }, (_, i) => `Sample ${i + 1}`),
+                            datasets: [
+                                {
+                                    label: 'Memory Used (MB)',
+                                    data: memoryData,
+                                    borderColor: 'rgba(50, 192, 192, 1)',
+                                    backgroundColor: 'rgba(50, 192, 192, 0.2)',
+                                    fill: false,
+                                    yAxisID: 'y1',
+                                    tension: 0.4
+                                },
+                                {
+                                    label: 'Utilization (%)',
+                                    data: utilizationData,
+                                    borderColor: 'rgba(255, 159, 64, 1)',
+                                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                                    fill: false,
+                                    yAxisID: 'y2',
+                                    tension: 0.4
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y1: {
+                                    type: 'linear',
+                                    position: 'left',
+                                    beginAtZero: true,
+                                    max: gpus[selectedGpuIndex].memory_total,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Memory (MB)',
+                                        color: '#ffffff'
+                                    }
+                                },
+                                y2: {
+                                    type: 'linear',
+                                    position: 'right',
+                                    beginAtZero: true,
+                                    max: 100,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)',
+                                        drawOnChartArea: false,
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Utilization (%)',
+                                        color: '#ffffff'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    },
+                                    ticks: {
+                                        display: false // Remove x-axis labels
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    labels: {
+                                        color: '#ffffff'
+                                    }
+                                }
+                            },
+                            transition: {
+                                duration: 500 // Duration for the new data point animation
+                            }
+                        }
+                    });
+                } else {
+                    combinedChart.data.labels.shift();
+                    combinedChart.data.labels.push(`Sample ${memoryData.length}`);
+                    combinedChart.data.datasets[0].data = memoryData;
+                    combinedChart.data.datasets[1].data = utilizationData;
+                    combinedChart.update('none'); // Update without animation
+                    // Animate only the last data point
+                    combinedChart.data.datasets.forEach(dataset => {
+                        dataset.pointRadius = Array(50).fill(0);
+                        dataset.pointRadius[dataset.pointRadius.length - 1] = 5;
+                    });
+                    combinedChart.update();
+                }
+
+                if (temperatureChart === null) {
+                    temperatureChart = new Chart(temperatureChartCanvas, {
+                        type: 'line',
+                        data: {
+                            labels: Array.from({ length: 50 }, (_, i) => `Sample ${i + 1}`),
+                            datasets: [{
+                                label: 'Temperature (°C)',
+                                data: temperatureData,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false, // Remove general animation
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Temperature (°C)',
+                                        color: '#ffffff'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    },
+                                    ticks: {
+                                        display: false // Remove x-axis labels
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    labels: {
+                                        color: '#ffffff'
+                                    }
+                                }
+                            },
+                            transition: {
+                                duration: 500 // Duration for the new data point animation
+                            }
+                        }
+                    });
+                } else {
+                    temperatureChart.data.labels.shift();
+                    temperatureChart.data.labels.push(`Sample ${temperatureData.length}`);
+                    temperatureChart.data.datasets[0].data = temperatureData;
+                    temperatureChart.update();
+                }
+            }
+        }
+
+        function updateDataAndCharts() {
+            selectedGpuIndex = parseInt(gpuSelect.value, 10);
+            displayGpuData(gpus[selectedGpuIndex]);
+            updateCharts(gpus[selectedGpuIndex]);
+        }
+
+        function startPolling() {
+            fetchGpuData();
+            setInterval(fetchGpuData, 1500);
+        }
+
+        document.addEventListener('DOMContentLoaded', startPolling);
+    </script>
+</body>
+</html>
