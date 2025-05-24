@@ -11,4 +11,4 @@ The web server runs by default on **port 5464**.
 To install and run `web-nvtop`, simply run this command:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/ArnauCosta/web-nvtop/main/install.sh)
+bash <(curl -s https://github.com/ArnauCosta/web-nvtop.git/main/install.sh)
